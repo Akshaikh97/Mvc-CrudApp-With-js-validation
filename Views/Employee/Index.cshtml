@@ -1,0 +1,212 @@
+﻿@model Project3._2.Models.Employee
+
+@{
+    var states = ViewBag.States as List<Project3._2.Models.State>;
+}
+
+<style>
+    .red-border {
+        border: 2px solid red !important;
+    }
+</style>
+
+<div class="container-fluid">
+    <form id="employeeForm">
+        <input asp-for="Id" type="hidden" id="employeeId" />
+        <div class="row">
+
+            <div class="col-md-4">
+                <label asp-for="Name" class="control-label"></label>
+                <input asp-for="Name" class="form-control required" type="text" />
+                <span asp-validation-for="Name" class="text-danger"></span>
+            </div>
+
+            <div class="col-md-4">
+                <label asp-for="Email" class="control-label"></label>
+                <input asp-for="Email" class="form-control required" type="email" />
+                <span asp-validation-for="Email" class="text-danger"></span>
+            </div>
+
+            <div class="col-md-4">
+                <label for="IsActive">Status</label><br />
+                <input type="checkbox" id="IsActive" name="IsActive" />
+                <label for="IsActive">Active?</label>
+            </div>
+        </div>
+
+        <div class="row">
+
+            <div class="col-md-4">
+                <label asp-for="Gender" class="control-label"></label>
+                <div>
+                    <input asp-for="Gender" value="Male" type="radio" />Male
+                    <input asp-for="Gender" value="Female" type="radio" />Female
+                </div>
+            </div>
+            
+
+            <div class="col-md-4">
+                <label>State</label>
+                <select asp-for="StateId" class="form-control required" id="StateId">
+                    <option value="">-- Select State --</option>
+                    @if (states != null)
+                    {
+                        @foreach (var state in states)
+                        {
+                            <option value="@state.Id">@state.Name</option>
+                        }
+                    }
+                </select>
+                <span asp-validation-for="StateId" class="text-danger"></span>
+            </div>
+
+            <div class="col-md-4">
+                <label>City</label>
+                <select asp-for="CityId" class="form-control required" id="CityId">
+                    <option value="">-- Select City --</option>
+                </select>
+                <span asp-validation-for="CityId" class="text-danger"></span>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Submit</button>
+        <button type="button" class="btn btn-info" style="display: none;" id="cancelBtn">Clear</button>
+
+    </form>
+</div>
+
+<div id="tblContent"></div>
+
+@section Scripts{
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function () {
+
+            loadEmployee();
+
+            $('#StateId').change(function () {
+                var stateId = $(this).val();
+
+                if (stateId) {
+                    console.log(stateId)
+                    debugger;
+                    $.ajax({
+                        url: 'Employee/GetCitiesById',
+                        type: 'GET',
+                        data: { stateId: stateId },
+                        success: function (data) {
+                            $('#CityId').empty().append('<option value=""> -- Select City -- </option>');
+                            $.each(data, function (i, c) {
+                                $('#CityId').append('<option value="' + c.id + '">' + c.name + '</option>');
+                            });
+                        },
+                        error: function () {
+                            alert('Error Loading Cities.');
+                        },
+                    });
+                } else {
+                    $('#CityId').empty().append('<option value=""> -- Select City -- </option>');
+                }
+            });
+
+            $('#employeeForm').on('submit', function (e) {
+                e.preventDefault();
+                $('.form-control').removeClass('red-border');
+                let isValid = true;
+                $('.required').each(function () {
+                    if (!$(this).val()) {
+                        $(this).addClass('red-border');
+                        isValid = false;
+                    }
+                });
+                
+                var formData = new FormData(this);
+                
+                const isActiveChecked = $('#IsActive').is(':checked');
+                formData.set('IsActive', isActiveChecked);
+
+                $.ajax({
+                    url: 'Employee/Save',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function (result) {
+                        const message = result.success
+                            ? result.message
+                            : result.error?.join(', ') || 'Unknown Error'
+
+                        alert(message);
+                        loadEmployee();
+                    },
+                });
+            });
+
+            $('#tblContent').on('click', '.editBtn', function () {
+                var id = $(this).data('id');
+                $.get('Employee/GetById?id=' + id, function (res) {
+                    var e = res.employee;
+                    $('#employeeId').val(e.id);
+                    $('#Name').val(e.name);
+                    $('#Email').val(e.email);
+                    //$('[name="Gender"][value="' + e.gender + '"]').prop('checked', true);
+                    $(`[name="Gender"][value="${e.gender}"]`).prop('checked', true);
+
+                    $('#StateId').val(e.stateId);
+                    $('#CityId').empty().append('<option value=""> -- Select City -- </option>');
+                    $.each(res.cities, function (i, c) {
+                        $('#CityId').append('<option value="' + c.id + '">' + c.name + '</option>');
+                    });
+                    $('#CityId').val(e.cityId);
+                    //$('#isActiveDiv').show();
+                    $('#IsActive').prop('checked', e.isActive === true);
+                    $('#cancelBtn').show();
+                });
+            });
+
+            $('#cancelBtn').click(function(){
+                $('#employeeForm')[0].reset();
+                $('#employeeId').val('0');
+                //$('#isActiveDiv').hide();
+                $('#cancelBtn').hide();
+            });
+        })
+        function loadEmployee() {
+            $.get('Employee/GetAll', function (data) {
+                let tblHTML = `
+                            <table class="table table-border">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Gender</th>
+                                        <th>State</th>
+                                        <th>City</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                        `;
+                $.each(data, function (i, e) {
+                    tblHTML += `
+                                <tr>
+                                    <td>${e.name}</td>
+                                    <td>${e.email}</td>
+                                    <td>${e.gender}</td>
+                                    <td>${e.stateName}</td>
+                                    <td>${e.cityName}</td>
+                                    <td>
+                                        <span class="${e.isActive ? 'text-success' : 'text-danger'}">${e.statusText}</span>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-info editBtn" data-id="${e.id}">Edit</button>
+                                    </td>
+                                </tr>
+                            `;
+                });
+                tblHTML += `</tbody></table>`;
+                $('#tblContent').html(tblHTML);
+            });
+        }
+    </script>
+}
